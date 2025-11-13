@@ -20,22 +20,25 @@ export default function Chat() {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [isConnecting, setIsConnecting] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+
   const [passwordRequired, setPasswordRequired] = useState(true);
   const [passwordInput, setPasswordInput] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   const roomCode = params?.roomCode?.toUpperCase();
+
+  // --- CLIENT ENV (must be set in client/.env)
+  const SPECIAL_ROOM = import.meta.env.VITE_SPECIAL_ROOM?.toUpperCase();
+  const SPECIAL_PASSWORD = import.meta.env.VITE_SPECIAL_PASSWORD?.trim();
+
+  const isProtectedRoom = roomCode === SPECIAL_ROOM;
 
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // Ask password only for permanent room ABHEEE
-  const isProtectedRoom = roomCode === process.env.CLIENT_SPECIAL_KEY_1;
 
   // SOCKET LOGIC
   useEffect(() => {
@@ -44,10 +47,10 @@ export default function Chat() {
       return;
     }
 
-    // If room is protected but no password given → show password UI
     const searchParams = new URLSearchParams(window.location.search);
     const passParam = searchParams.get("pass");
 
+    // If protected room → require password
     if (isProtectedRoom && !passParam) {
       setPasswordRequired(true);
       setIsConnecting(false);
@@ -78,9 +81,6 @@ export default function Chat() {
     // Connect socket
     const socket = io({
       path: "/ws/socket.io",
-      query: {
-        pass: passParam || "",
-      },
     });
 
     socketRef.current = socket;
@@ -89,7 +89,7 @@ export default function Chat() {
       socket.emit("join-room", {
         roomCode,
         user,
-        pass: passParam || "",
+        password: passParam || "",
       });
     });
 
@@ -145,8 +145,6 @@ export default function Chat() {
           type: "system",
         },
       ]);
-
-      setTypingUsers((prev) => prev.filter((u) => u !== data.username));
     });
 
     socket.on("receive-message", (data) => {
@@ -163,7 +161,9 @@ export default function Chat() {
 
     socket.on("stop-typing", (data) => {
       if (data.userId !== user.id) {
-        setTypingUsers((prev) => prev.filter((u) => u !== data.username));
+        setTypingUsers((prev) =>
+          prev.filter((name) => name !== data.username)
+        );
       }
     });
 
@@ -183,17 +183,13 @@ export default function Chat() {
 
     return () => {
       socket.disconnect();
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [roomCode, setLocation, toast, isProtectedRoom]);
+  }, [roomCode, isProtectedRoom, setLocation, toast]);
 
   // Send message
   const sendMessage = (content: string) => {
     if (socketRef.current?.connected && currentUser) {
-      socketRef.current.emit("send-message", {
-        roomCode,
-        content,
-      });
+      socketRef.current.emit("send-message", { roomCode, content });
     }
   };
 
@@ -210,7 +206,7 @@ export default function Chat() {
     setLocation("/");
   };
 
-  // Password Screen
+  // Password Screen for private room
   if (passwordRequired && isProtectedRoom) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-background p-6">
@@ -227,13 +223,10 @@ export default function Chat() {
         <button
           className="bg-primary text-white px-4 py-2 rounded"
           onClick={() => {
-            const correctPass =
-              process.env.CLIENT_SPECIAL_KEY_2?.trim() || "";
-
-            if (passwordInput.trim() === correctPass) {
+            if (passwordInput.trim() === SPECIAL_PASSWORD) {
               setPasswordRequired(false);
               setLocation(
-                `/chat/${roomCode}?pass=${encodeURIComponent(correctPass)}`
+                `/chat/${roomCode}?pass=${encodeURIComponent(SPECIAL_PASSWORD)}`
               );
             } else {
               toast({
@@ -249,7 +242,7 @@ export default function Chat() {
     );
   }
 
-  // Loading states
+  // Loading screen
   if (isConnecting) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
