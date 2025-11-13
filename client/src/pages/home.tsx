@@ -14,6 +14,7 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
 
+  // Create Room
   const handleCreateRoom = async () => {
     setIsCreating(true);
     try {
@@ -27,7 +28,6 @@ export default function Home() {
 
       const data = await response.json();
 
-      // FIX: add username support for creators
       const finalName =
         username.trim() === "" ? "random" : encodeURIComponent(username.trim());
 
@@ -44,6 +44,7 @@ export default function Home() {
     }
   };
 
+  // Join Room
   const handleJoinRoom = () => {
     const code = joinCode.trim().toUpperCase();
 
@@ -65,6 +66,8 @@ export default function Home() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md mx-auto">
+        
+        {/* HEADER */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
             <div className="bg-primary/10 p-3 rounded-2xl">
@@ -77,6 +80,7 @@ export default function Home() {
           </p>
         </div>
 
+        {/* CARD */}
         <Card className="shadow-lg">
           <CardHeader className="space-y-1">
             <CardTitle className="text-xl">Get Started</CardTitle>
@@ -86,6 +90,23 @@ export default function Home() {
           </CardHeader>
 
           <CardContent className="space-y-6">
+
+            {/* USERNAME INPUT (Matches Room Code Styling) */}
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-sm font-medium">
+                Username (optional)
+              </Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="Enter your name or leave blank"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                maxLength={20}
+                className="text-center text-lg font-mono tracking-wider"
+              />
+            </div>
+
             {/* CREATE ROOM BUTTON */}
             <div className="space-y-3">
               <Button
@@ -99,7 +120,7 @@ export default function Home() {
               </Button>
             </div>
 
-            {/* Divider */}
+            {/* DIVIDER */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
@@ -109,22 +130,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* USERNAME INPUT */}
+            {/* JOIN ROOM SECTION */}
             <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm font-medium">
-                  Username (optional)
-                </Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="Enter your name or leave blank"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  maxLength={20}
-                  className="text-center"
-                />
-              </div>
 
               {/* ROOM CODE INPUT */}
               <div className="space-y-2">
@@ -144,7 +151,7 @@ export default function Home() {
                 />
               </div>
 
-              {/* JOIN ROOM BUTTON */}
+              {/* JOIN BUTTON */}
               <Button
                 onClick={handleJoinRoom}
                 variant="secondary"
@@ -158,12 +165,13 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* FOOTER INFO */}
+        {/* FOOTER */}
         <div className="mt-6 text-center">
           <p className="text-xs text-muted-foreground">
             Rooms automatically expire after 30 minutes of inactivity
           </p>
         </div>
+
       </div>
     </div>
   );
