@@ -13,53 +13,61 @@ export default function Chat() {
   const [, params] = useRoute("/chat/:roomCode");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<UserInRoom[]>([]);
   const [currentUser, setCurrentUser] = useState<UserInRoom | null>(null);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [isConnecting, setIsConnecting] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   const roomCode = params?.roomCode?.toUpperCase();
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Socket.IO connection
+  // SOCKET + USERNAME LOGIC
   useEffect(() => {
     if (!roomCode) {
       setLocation("/");
       return;
     }
 
-    // Generate random username and color
-    const randomUsername = `User${Math.floor(Math.random() * 10000)}`;
-    const randomColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
-    const userId = Math.random().toString(36).substring(7);
+    // --- USERNAME FIX ---
+    const searchParams = new URLSearchParams(window.location.search);
+    const usernameParam = searchParams.get("username");
+
+    const finalUsername =
+      !usernameParam || usernameParam === "random"
+        ? `User${Math.floor(Math.random() * 10000)}`
+        : decodeURIComponent(usernameParam);
+
+    const finalColor =
+      USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+
+    const finalUserId = Math.random().toString(36).substring(7);
 
     const user: UserInRoom = {
-      id: userId,
-      username: randomUsername,
-      color: randomColor,
+      id: finalUserId,
+      username: finalUsername,
+      color: finalColor,
     };
+
     setCurrentUser(user);
 
-    // Connect to Socket.IO server
+    // CONNECT
     const socket = io({
       path: "/ws/socket.io",
     });
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("Socket.IO connected");
-      // Join room
       socket.emit("join-room", {
         roomCode,
         user,
@@ -108,7 +116,6 @@ export default function Chat() {
           type: "system",
         },
       ]);
-      // Remove from typing users
       setTypingUsers((prev) => prev.filter((u) => u !== data.username));
     });
 
@@ -117,18 +124,15 @@ export default function Chat() {
     });
 
     socket.on("typing", (data) => {
-      if (data.userId !== userId) {
-        setTypingUsers((prev) => {
-          if (!prev.includes(data.username)) {
-            return [...prev, data.username];
-          }
-          return prev;
-        });
+      if (data.userId !== user.id) {
+        setTypingUsers((prev) =>
+          prev.includes(data.username) ? prev : [...prev, data.username]
+        );
       }
     });
 
     socket.on("stop-typing", (data) => {
-      if (data.userId !== userId) {
+      if (data.userId !== user.id) {
         setTypingUsers((prev) => prev.filter((u) => u !== data.username));
       }
     });
@@ -153,8 +157,7 @@ export default function Chat() {
       setTimeout(() => setLocation("/"), 2000);
     });
 
-    socket.on("connect_error", (error) => {
-      console.error("Socket.IO connection error:", error);
+    socket.on("connect_error", () => {
       setConnectionError("Connection error");
       setIsConnecting(false);
     });
@@ -165,9 +168,7 @@ export default function Chat() {
 
     return () => {
       socket.disconnect();
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, [roomCode, setLocation, toast]);
 
@@ -189,9 +190,7 @@ export default function Chat() {
   };
 
   const handleLeave = () => {
-    if (socketRef.current?.connected) {
-      socketRef.current.disconnect();
-    }
+    socketRef.current?.disconnect();
     setLocation("/");
   };
 

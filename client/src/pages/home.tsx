@@ -10,6 +10,7 @@ import { MessageSquare } from "lucide-react";
 export default function Home() {
   const [, setLocation] = useLocation();
   const [joinCode, setJoinCode] = useState("");
+  const [username, setUsername] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
 
@@ -19,7 +20,7 @@ export default function Home() {
       const response = await fetch("/api/create-room", {
         method: "POST",
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to create room");
       }
@@ -39,6 +40,7 @@ export default function Home() {
 
   const handleJoinRoom = () => {
     const code = joinCode.trim().toUpperCase();
+
     if (code.length !== 6) {
       toast({
         title: "Invalid Code",
@@ -47,7 +49,11 @@ export default function Home() {
       });
       return;
     }
-    setLocation(`/chat/${code}`);
+
+    const finalName =
+      username.trim() === "" ? "random" : encodeURIComponent(username.trim());
+
+    setLocation(`/chat/${code}?username=${finalName}`);
   };
 
   return (
@@ -72,7 +78,9 @@ export default function Home() {
               Create a new room or join an existing one
             </CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-6">
+            {/* CREATE ROOM BUTTON */}
             <div className="space-y-3">
               <Button
                 onClick={handleCreateRoom}
@@ -85,6 +93,7 @@ export default function Home() {
               </Button>
             </div>
 
+            {/* Divider */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
@@ -94,7 +103,24 @@ export default function Home() {
               </div>
             </div>
 
+            {/* USERNAME INPUT */}
             <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-sm font-medium">
+                  Username (optional)
+                </Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your name or leave blank"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  maxLength={20}
+                  className="text-center"
+                />
+              </div>
+
+              {/* ROOM CODE INPUT */}
               <div className="space-y-2">
                 <Label htmlFor="room-code" className="text-sm font-medium">
                   Room Code
@@ -111,6 +137,8 @@ export default function Home() {
                   data-testid="input-room-code"
                 />
               </div>
+
+              {/* JOIN ROOM BUTTON */}
               <Button
                 onClick={handleJoinRoom}
                 variant="secondary"
@@ -124,6 +152,7 @@ export default function Home() {
           </CardContent>
         </Card>
 
+        {/* FOOTER INFO */}
         <div className="mt-6 text-center">
           <p className="text-xs text-muted-foreground">
             Rooms automatically expire after 30 minutes of inactivity
