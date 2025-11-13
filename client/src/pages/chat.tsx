@@ -20,6 +20,8 @@ export default function Chat() {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [isConnecting, setIsConnecting] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [passwordRequired, setPasswordRequired] = useState(true);
+  const [passwordInput, setPasswordInput] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -32,15 +34,27 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // SOCKET + USERNAME LOGIC
+  // Ask password only for permanent room ABHEEE
+  const isProtectedRoom = roomCode === process.env.CLIENT_SPECIAL_KEY_1;
+
+  // SOCKET LOGIC
   useEffect(() => {
     if (!roomCode) {
       setLocation("/");
       return;
     }
 
-    // --- USERNAME FIX ---
+    // If room is protected but no password given → show password UI
     const searchParams = new URLSearchParams(window.location.search);
+    const passParam = searchParams.get("pass");
+
+    if (isProtectedRoom && !passParam) {
+      setPasswordRequired(true);
+      setIsConnecting(false);
+      return;
+    }
+
+    // Username logic
     const usernameParam = searchParams.get("username");
 
     const finalUsername =
@@ -61,23 +75,38 @@ export default function Chat() {
 
     setCurrentUser(user);
 
-    // CONNECT
+    // Connect socket
     const socket = io({
       path: "/ws/socket.io",
+      query: {
+        pass: passParam || "",
+      },
     });
+
     socketRef.current = socket;
 
     socket.on("connect", () => {
       socket.emit("join-room", {
         roomCode,
         user,
+        pass: passParam || "",
       });
+    });
+
+    socket.on("invalid-password", () => {
+      toast({
+        title: "Access Denied",
+        description: "Incorrect password.",
+        variant: "destructive",
+      });
+      setTimeout(() => setLocation("/"), 1500);
     });
 
     socket.on("joined", (data) => {
       setIsConnecting(false);
       setUsers(data.users);
       setMessages(data.messages || []);
+
       toast({
         title: "Connected",
         description: `Joined room ${roomCode}`,
@@ -116,6 +145,7 @@ export default function Chat() {
           type: "system",
         },
       ]);
+
       setTypingUsers((prev) => prev.filter((u) => u !== data.username));
     });
 
@@ -140,38 +170,24 @@ export default function Chat() {
     socket.on("room-expired", () => {
       toast({
         title: "Room Expired",
-        description: "This room has been closed due to inactivity",
+        description: "Messages cleared after inactivity",
         variant: "destructive",
       });
-      setTimeout(() => setLocation("/"), 2000);
     });
 
     socket.on("error", (data) => {
       setConnectionError(data.message);
       setIsConnecting(false);
-      toast({
-        title: "Error",
-        description: data.message,
-        variant: "destructive",
-      });
       setTimeout(() => setLocation("/"), 2000);
-    });
-
-    socket.on("connect_error", () => {
-      setConnectionError("Connection error");
-      setIsConnecting(false);
-    });
-
-    socket.on("disconnect", () => {
-      console.log("Socket.IO disconnected");
     });
 
     return () => {
       socket.disconnect();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [roomCode, setLocation, toast]);
+  }, [roomCode, setLocation, toast, isProtectedRoom]);
 
+  // Send message
   const sendMessage = (content: string) => {
     if (socketRef.current?.connected && currentUser) {
       socketRef.current.emit("send-message", {
@@ -194,6 +210,46 @@ export default function Chat() {
     setLocation("/");
   };
 
+  // Password Screen
+  if (passwordRequired && isProtectedRoom) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-background p-6">
+        <h2 className="text-xl font-semibold mb-4">Enter Room Password</h2>
+
+        <input
+          type="password"
+          className="border p-2 rounded mb-3 w-64 text-center"
+          placeholder="Enter Password"
+          value={passwordInput}
+          onChange={(e) => setPasswordInput(e.target.value)}
+        />
+
+        <button
+          className="bg-primary text-white px-4 py-2 rounded"
+          onClick={() => {
+            const correctPass =
+              process.env.CLIENT_SPECIAL_KEY_2?.trim() || "";
+
+            if (passwordInput.trim() === correctPass) {
+              setPasswordRequired(false);
+              setLocation(
+                `/chat/${roomCode}?pass=${encodeURIComponent(correctPass)}`
+              );
+            } else {
+              toast({
+                title: "Incorrect Password",
+                variant: "destructive",
+              });
+            }
+          }}
+        >
+          Enter Room
+        </button>
+      </div>
+    );
+  }
+
+  // Loading states
   if (isConnecting) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
@@ -210,12 +266,13 @@ export default function Chat() {
       <div className="h-screen flex items-center justify-center bg-background">
         <div className="text-center max-w-md">
           <p className="text-destructive mb-4">{connectionError}</p>
-          <p className="text-muted-foreground">Redirecting to home...</p>
+          <p className="text-muted-foreground">Redirecting...</p>
         </div>
       </div>
     );
   }
 
+  // MAIN CHAT UI
   return (
     <div className="h-screen flex flex-col bg-background">
       <ChatHeader

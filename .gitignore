@@ -1,6 +1,22 @@
+# Node & build artifacts
 node_modules
 dist
 .DS_Store
+
+# Public build folder
 server/public
+
+# Vite temp files
 vite.config.ts.*
+
+# Archives
 *.tar.gz
+
+# Ignore ALL environment files everywhere
+.env
+*.env
+*.env.*
+client/.env
+client/.env.*
+server/.env
+server/.env.*
