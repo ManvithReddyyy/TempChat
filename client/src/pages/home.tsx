@@ -14,12 +14,17 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
 
-  const finalName = username.trim() === "" ? "random" : encodeURIComponent(username.trim());
-  const SECRET_ROOM = import.meta.env.VITE_SECRET_ROOM_CODE; // secure
+  // Username fallback
+  const finalName =
+    username.trim() === "" ? "random" : encodeURIComponent(username.trim());
 
-  // Create Room
+  // Secret room code from client .env
+  const SECRET_ROOM = import.meta.env.VITE_SECRET_ROOM_CODE?.toUpperCase();
+
+  // Create Temporary Room
   const handleCreateRoom = async () => {
     setIsCreating(true);
+
     try {
       const response = await fetch("/api/create-room", { method: "POST" });
       if (!response.ok) throw new Error("Failed to create room");
@@ -37,9 +42,10 @@ export default function Home() {
     }
   };
 
-  // Join Room
+  // Join Room (normal or secret)
   const handleJoinRoom = () => {
     const code = joinCode.trim().toUpperCase();
+
     if (code.length !== 6) {
       toast({
         title: "Invalid Code",
@@ -49,20 +55,23 @@ export default function Home() {
       return;
     }
 
-    // ✅ Secret room login
+    // Secret room case
     if (SECRET_ROOM && code === SECRET_ROOM) {
       const pass = prompt("This room is protected. Enter password:");
 
       if (!pass) {
         toast({
           title: "Password required",
-          description: "You must enter a valid password.",
+          description: "You must enter a password to join.",
           variant: "destructive",
         });
         return;
       }
 
-      setLocation(`/chat/${code}?username=${finalName}&key=${encodeURIComponent(pass)}`);
+      // Correct param name → pass=
+      setLocation(
+        `/chat/${code}?username=${finalName}&pass=${encodeURIComponent(pass)}`
+      );
       return;
     }
 
@@ -112,7 +121,9 @@ export default function Home() {
             </div>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">TempChat</h1>
-          <p className="text-sm text-muted-foreground">Temporary chat rooms that auto-expire</p>
+          <p className="text-sm text-muted-foreground">
+            Temporary chat rooms that auto-expire
+          </p>
         </div>
 
         {/* CARD */}
