@@ -115,4 +115,3 @@ We are redefining real-time communication by building a messaging platform that 
 - Purposefully designed  
 
 TempChat is communication — refined.
-
