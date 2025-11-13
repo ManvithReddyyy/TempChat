@@ -2,229 +2,169 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { roomManager } from "./roomManager";
-import { UserInRoom, Message, USER_COLORS } from "@shared/schema";
+import { UserInRoom, Message } from "@shared/schema";
 import dotenv from "dotenv";
 
-// Load .env (safe values like the hidden room code + password)
 dotenv.config();
 
-// Generic, non-obvious env var names (keeps secrets stealthy)
+// Hidden secret room
 const HIDDEN_ROOM_CODE = (process.env.SPECIAL_KEY_1 || "").toUpperCase();
 const HIDDEN_ROOM_PASS = process.env.SPECIAL_KEY_2 || "";
 
-// Map to track socket connections to users
-const socketToUser = new Map<string, { userId: string; roomCode: string; user: UserInRoom }>();
+// Map socket → user
+const socketToUser = new Map<
+  string,
+  { userId: string; roomCode: string; user: UserInRoom }
+>();
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // API endpoint to create a new room
+  // Create normal room
   app.post("/api/create-room", (req, res) => {
     try {
       const roomCode = roomManager.createRoom();
       res.json({ roomCode });
     } catch (error) {
-      console.error("Error creating room:", error);
       res.status(500).json({ error: "Failed to create room" });
     }
   });
 
-  // Create HTTP server
   const httpServer = createServer(app);
 
-  // Initialize Socket.IO server on /ws path
   const io = new SocketIOServer(httpServer, {
     path: "/ws/socket.io",
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
-    },
+    cors: { origin: "*", methods: ["GET", "POST"] }
   });
 
-  // Register room expiration handler
+  // Room expiration cleanup
   roomManager.onRoomExpired((roomCode) => {
-    console.log(`Notifying clients in room ${roomCode} about expiration`);
     io.to(roomCode).emit("room-expired");
-    // Disconnect all sockets in the room
     io.in(roomCode).disconnectSockets();
   });
 
-  // Socket.IO event handlers
   io.on("connection", (socket) => {
-    console.log("Client connected:", socket.id);
+    console.log("Socket connected:", socket.id);
 
     socket.on("join-room", (data) => {
       try {
-        const rawRoomCode = data?.roomCode;
+        const roomCode = String(data?.roomCode || "").toUpperCase();
         const user = data?.user;
-        const password = data?.password; // may be undefined
+        const password = data?.pass; // <-- CLIENT SENDS pass !!
 
-        if (!rawRoomCode || !user) {
+        if (!roomCode || !user) {
           socket.emit("error", { message: "Invalid join request" });
           return;
         }
 
-        const roomCode = String(rawRoomCode).toUpperCase();
-
-        // If this is the hidden room, require a password match
-        if (HIDDEN_ROOM_CODE && roomCode === HIDDEN_ROOM_CODE) {
-          if (!password || password !== HIDDEN_ROOM_PASS) {
-            socket.emit("error", { message: "Invalid room or password" });
+        // Protected room password logic
+        if (roomCode === HIDDEN_ROOM_CODE) {
+          if (!password || password.trim() !== HIDDEN_ROOM_PASS.trim()) {
+            socket.emit("invalid-password");
             return;
           }
         }
 
-        // Check if room exists
+        // Normal room?
         if (!roomManager.roomExists(roomCode)) {
           socket.emit("error", { message: "Room not found" });
           return;
         }
 
-        // Add user to room
-        const success = roomManager.addUser(roomCode, user);
-        if (!success) {
+        // Add user
+        const okay = roomManager.addUser(roomCode, user);
+        if (!okay) {
           socket.emit("error", { message: "Failed to join room" });
           return;
         }
 
-        // Store socket-user mapping
+        // Save socket-user link
         socketToUser.set(socket.id, { userId: user.id, roomCode, user });
 
-        // Join socket room
         socket.join(roomCode);
 
-        // Send current room state to the joining user
         const messages = roomManager.getMessages(roomCode);
         const users = roomManager.getUsers(roomCode);
+
         socket.emit("joined", { users, messages });
 
-        // Notify other users in the room
         socket.to(roomCode).emit("user-joined", {
           username: user.username,
-          users,
+          users
         });
 
-        console.log(`User ${user.username} joined room ${roomCode}`);
-      } catch (error) {
-        console.error("Error joining room:", error);
+        if (roomCode === HIDDEN_ROOM_CODE) {
+          console.log("[Hidden room] user joined.");
+        } else {
+          console.log(`User ${user.username} joined ${roomCode}`);
+        }
+
+      } catch (err) {
         socket.emit("error", { message: "Failed to join room" });
       }
     });
 
+    // Sending messages
     socket.on("send-message", (data) => {
-      try {
-        const { roomCode, content } = data;
-        const userInfo = socketToUser.get(socket.id);
+      const userInfo = socketToUser.get(socket.id);
+      if (!userInfo) return;
 
-        if (!userInfo || !content || content.trim().length === 0) {
-          return;
-        }
+      const { roomCode, content } = data;
+      if (!content?.trim() || roomCode !== userInfo.roomCode) return;
 
-        if (userInfo.roomCode !== roomCode) {
-          return;
-        }
+      const msg: Message = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        roomCode,
+        userId: userInfo.userId,
+        username: userInfo.user.username,
+        userColor: userInfo.user.color,
+        content: content.trim(),
+        timestamp: Date.now(),
+        type: "user"
+      };
 
-        // Create message
-        const message: Message = {
-          id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
-          roomCode,
-          userId: userInfo.userId,
-          username: userInfo.user.username,
-          userColor: userInfo.user.color,
-          content: content.trim(),
-          timestamp: Date.now(),
-          type: "user",
-        };
-
-        // Add message to room
-        const success = roomManager.addMessage(roomCode, message);
-        if (!success) {
-          return;
-        }
-
-        // Broadcast message to all users in the room (including sender)
-        io.to(roomCode).emit("receive-message", { message });
-
-        console.log(`Message sent in room ${roomCode} by ${userInfo.user.username}`);
-      } catch (error) {
-        console.error("Error sending message:", error);
-      }
+      roomManager.addMessage(roomCode, msg);
+      io.to(roomCode).emit("receive-message", { message: msg });
     });
 
+    // Typing events
     socket.on("typing", (data) => {
-      try {
-        const { roomCode } = data;
-        const userInfo = socketToUser.get(socket.id);
+      const userInfo = socketToUser.get(socket.id);
+      if (!userInfo || userInfo.roomCode !== data.roomCode) return;
 
-        if (!userInfo || userInfo.roomCode !== roomCode) {
-          return;
-        }
-
-        // Notify other users (not the sender)
-        socket.to(roomCode).emit("typing", {
-          userId: userInfo.userId,
-          username: userInfo.user.username,
-        });
-      } catch (error) {
-        console.error("Error handling typing event:", error);
-      }
+      socket.to(data.roomCode).emit("typing", {
+        userId: userInfo.userId,
+        username: userInfo.user.username
+      });
     });
 
     socket.on("stop-typing", (data) => {
-      try {
-        const { roomCode } = data;
-        const userInfo = socketToUser.get(socket.id);
+      const userInfo = socketToUser.get(socket.id);
+      if (!userInfo || userInfo.roomCode !== data.roomCode) return;
 
-        if (!userInfo || userInfo.roomCode !== roomCode) {
-          return;
-        }
-
-        // Notify other users (not the sender)
-        socket.to(roomCode).emit("stop-typing", {
-          userId: userInfo.userId,
-          username: userInfo.user.username,
-        });
-      } catch (error) {
-        console.error("Error handling stop-typing event:", error);
-      }
+      socket.to(data.roomCode).emit("stop-typing", {
+        userId: userInfo.userId,
+        username: userInfo.user.username
+      });
     });
 
+    // Disconnect
     socket.on("disconnect", () => {
-      try {
-        const userInfo = socketToUser.get(socket.id);
-        if (!userInfo) {
-          console.log("Client disconnected:", socket.id);
-          return;
-        }
+      const info = socketToUser.get(socket.id);
+      if (!info) return;
 
-        const { roomCode, userId, user } = userInfo;
+      const { roomCode, userId, user } = info;
 
-        // Remove user from room
-        roomManager.removeUser(roomCode, userId);
+      roomManager.removeUser(roomCode, userId);
 
-        // Get updated user list
-        const users = roomManager.getUsers(roomCode);
+      const users = roomManager.getUsers(roomCode);
 
-        // Notify other users
-        socket.to(roomCode).emit("user-left", {
-          username: user.username,
-          users,
-        });
+      socket.to(roomCode).emit("user-left", {
+        username: user.username,
+        users
+      });
 
-        // Clean up mapping
-        socketToUser.delete(socket.id);
-
-        console.log(`User ${user.username} left room ${roomCode}`);
-      } catch (error) {
-        console.error("Error handling disconnect:", error);
-      }
+      socketToUser.delete(socket.id);
     });
   });
-
-  // Periodic cleanup of expired rooms (handled by room manager timeouts)
-  // Additional cleanup every 5 minutes for safety
-  setInterval(() => {
-    const activeRooms = roomManager.getActiveRooms();
-    console.log(`Active rooms: ${activeRooms.length}`);
-  }, 5 * 60 * 1000);
 
   return httpServer;
 }

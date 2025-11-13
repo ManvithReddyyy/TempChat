@@ -3,11 +3,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Hidden secret room values
-const hiddenKey = process.env.SPECIAL_KEY_1 || "";
+// Hidden secret room values (not visible in GitHub because from .env)
+const hiddenKey = (process.env.SPECIAL_KEY_1 || "").toUpperCase();
 const hiddenPass = process.env.SPECIAL_KEY_2 || "";
 
-// 30 minutes timeout
+// Temporary room inactivity timeout (30 minutes)
 const ROOM_INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 
 interface RoomData {
@@ -28,12 +28,18 @@ class RoomManager {
     }
   }
 
-  // Password check ONLY for hidden room
+  /**
+   * Validate password (ONLY for protected hidden room)
+   */
   validatePassword(code: string, pass?: string): boolean {
-    if (code !== hiddenKey) return true; // normal rooms don't need password
+    if (code !== hiddenKey) return true; // Normal rooms need no password
     return pass === hiddenPass;
   }
 
+  /**
+   * Generate random 6-character room code
+   * Hidden room code is never generated.
+   */
   generateRoomCode(): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let code = "";
@@ -41,6 +47,7 @@ class RoomManager {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
 
+    // Avoid collisions + avoid generating secret room key
     if (this.rooms.has(code) || code === hiddenKey) {
       return this.generateRoomCode();
     }
@@ -48,6 +55,9 @@ class RoomManager {
     return code;
   }
 
+  /**
+   * Create a temporary auto-expiring room
+   */
   createRoom(): string {
     const code = this.generateRoomCode();
     const now = Date.now();
@@ -71,7 +81,10 @@ class RoomManager {
     return code;
   }
 
-  // Virtual room for hidden key
+  /**
+   * Get room info
+   * Protected room returns a virtual room object (not stored)
+   */
   getRoom(code: string): Room | undefined {
     if (code === hiddenKey) {
       return {
@@ -82,23 +95,26 @@ class RoomManager {
       };
     }
 
-    const d = this.rooms.get(code);
-    return d?.room;
+    return this.rooms.get(code)?.room;
   }
 
   getMessages(code: string): Message[] {
-    const d = this.rooms.get(code);
-    return d?.messages || [];
+    if (code === hiddenKey) return []; // Never store protected messages
+    return this.rooms.get(code)?.messages || [];
   }
 
+  /**
+   * Add user to room
+   * Protected room NEVER stores user list
+   */
   addUser(code: string, user: UserInRoom): boolean {
-    if (code === hiddenKey) return true; // don't store
+    if (code === hiddenKey) return true; // skip storing
 
-    const d = this.rooms.get(code);
-    if (!d) return false;
+    const data = this.rooms.get(code);
+    if (!data) return false;
 
-    if (!d.room.users.find((u) => u.id === user.id)) {
-      d.room.users.push(user);
+    if (!data.room.users.find((u) => u.id === user.id)) {
+      data.room.users.push(user);
     }
 
     this.updateRoomActivity(code);
@@ -106,19 +122,19 @@ class RoomManager {
   }
 
   removeUser(code: string, userId: string): UserInRoom | undefined {
-    if (code === hiddenKey) return;
+    if (code === hiddenKey) return; // skip remove
 
-    const d = this.rooms.get(code);
-    if (!d) return;
+    const data = this.rooms.get(code);
+    if (!data) return;
 
-    const idx = d.room.users.findIndex((u) => u.id === userId);
+    const idx = data.room.users.findIndex((u) => u.id === userId);
     if (idx === -1) return;
 
-    const [removed] = d.room.users.splice(idx, 1);
+    const [removed] = data.room.users.splice(idx, 1);
 
     this.updateRoomActivity(code);
 
-    if (d.room.users.length === 0) {
+    if (data.room.users.length === 0) {
       this.deleteRoom(code);
     }
 
@@ -127,69 +143,82 @@ class RoomManager {
 
   getUsers(code: string): UserInRoom[] {
     if (code === hiddenKey) return [];
-    const d = this.rooms.get(code);
-    return d?.room.users || [];
+    return this.rooms.get(code)?.room.users || [];
   }
 
   addMessage(code: string, message: Message): boolean {
-    if (code === hiddenKey) return true;
+    if (code === hiddenKey) return true; // do not store
 
-    const d = this.rooms.get(code);
-    if (!d) return false;
+    const data = this.rooms.get(code);
+    if (!data) return false;
 
-    d.messages.push(message);
+    data.messages.push(message);
     this.updateRoomActivity(code);
     return true;
   }
 
+  /**
+   * Update last activity and reset timeout
+   */
   private updateRoomActivity(code: string) {
     if (code === hiddenKey) return;
 
-    const d = this.rooms.get(code);
-    if (!d) return;
+    const data = this.rooms.get(code);
+    if (!data) return;
 
-    d.room.lastActivity = Date.now();
+    data.room.lastActivity = Date.now();
 
-    clearTimeout(d.timeoutId);
-    d.timeoutId = this.setRoomTimeout(code);
+    clearTimeout(data.timeoutId);
+    data.timeoutId = this.setRoomTimeout(code);
   }
 
   onRoomExpired(cb: RoomExpiredCallback) {
     this.onRoomExpiredCallbacks.push(cb);
   }
 
+  /**
+   * Set 30-minute timeout for room auto-deletion
+   */
   private setRoomTimeout(code: string): NodeJS.Timeout {
     return setTimeout(() => {
-      if (code === hiddenKey) return;
+      if (code === hiddenKey) return; // protected room never expires
 
-      console.log(`Room ${code} expired due to inactivity`);
-      const d = this.rooms.get(code);
-      if (d) {
-        clearTimeout(d.timeoutId);
+      const data = this.rooms.get(code);
+      if (data) {
+        clearTimeout(data.timeoutId);
         this.rooms.delete(code);
       }
 
       this.onRoomExpiredCallbacks.forEach((cb) => cb(code));
+      console.log(`Room ${code} expired.`);
     }, ROOM_INACTIVITY_TIMEOUT);
   }
 
+  /**
+   * Manual delete
+   */
   deleteRoom(code: string) {
-    if (code === hiddenKey) return;
+    if (code === hiddenKey) return; // cannot delete protected room
 
-    const d = this.rooms.get(code);
-    if (d) {
-      clearTimeout(d.timeoutId);
+    const data = this.rooms.get(code);
+    if (data) {
+      clearTimeout(data.timeoutId);
       this.rooms.delete(code);
     }
-
     console.log(`Room deleted: ${code}`);
   }
 
+  /**
+   * Check existence
+   */
   roomExists(code: string): boolean {
     if (code === hiddenKey) return true;
     return this.rooms.has(code);
   }
 
+  /**
+   * For debugging / admin tool
+   */
   getActiveRooms(): string[] {
     return Array.from(this.rooms.keys());
   }
