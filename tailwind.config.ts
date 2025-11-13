@@ -96,10 +96,20 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "typing-dots": {
+          "0%, 60%, 100%": { opacity: "0.3" },
+          "30%": { opacity: "1" },
+        },
+        "fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "typing-dots": "typing-dots 1.4s infinite",
+        "fade-in": "fade-in 0.2s ease-out",
       },
     },
   },
