@@ -29,18 +29,17 @@ export default function Chat() {
 
   const roomCode = params?.roomCode?.toUpperCase();
 
-  // --- CLIENT ENV (must be set in client/.env)
+  // IMPORTANT — CLIENT .ENV VALUES
   const SPECIAL_ROOM = import.meta.env.VITE_SPECIAL_ROOM?.toUpperCase();
   const SPECIAL_PASSWORD = import.meta.env.VITE_SPECIAL_PASSWORD?.trim();
-
   const isProtectedRoom = roomCode === SPECIAL_ROOM;
 
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // SOCKET LOGIC
+  // MAIN SOCKET LOGIC
   useEffect(() => {
     if (!roomCode) {
       setLocation("/");
@@ -48,9 +47,9 @@ export default function Chat() {
     }
 
     const searchParams = new URLSearchParams(window.location.search);
-    const passParam = searchParams.get("pass");
+    const passParam = searchParams.get("password");
 
-    // If protected room → require password
+    // If this is the private room → require password before connecting socket
     if (isProtectedRoom && !passParam) {
       setPasswordRequired(true);
       setIsConnecting(false);
@@ -59,7 +58,6 @@ export default function Chat() {
 
     // Username logic
     const usernameParam = searchParams.get("username");
-
     const finalUsername =
       !usernameParam || usernameParam === "random"
         ? `User${Math.floor(Math.random() * 10000)}`
@@ -78,7 +76,7 @@ export default function Chat() {
 
     setCurrentUser(user);
 
-    // Connect socket
+    // Connect to socket
     const socket = io({
       path: "/ws/socket.io",
     });
@@ -152,19 +150,15 @@ export default function Chat() {
     });
 
     socket.on("typing", (data) => {
-      if (data.userId !== user.id) {
-        setTypingUsers((prev) =>
-          prev.includes(data.username) ? prev : [...prev, data.username]
-        );
-      }
+      setTypingUsers((prev) =>
+        prev.includes(data.username) ? prev : [...prev, data.username]
+      );
     });
 
     socket.on("stop-typing", (data) => {
-      if (data.userId !== user.id) {
-        setTypingUsers((prev) =>
-          prev.filter((name) => name !== data.username)
-        );
-      }
+      setTypingUsers((prev) =>
+        prev.filter((name) => name !== data.username)
+      );
     });
 
     socket.on("room-expired", () => {
@@ -193,6 +187,7 @@ export default function Chat() {
     }
   };
 
+  // Typing indicator
   const handleTypingChange = (isTyping: boolean) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit(isTyping ? "typing" : "stop-typing", {
@@ -206,7 +201,7 @@ export default function Chat() {
     setLocation("/");
   };
 
-  // Password Screen for private room
+  // PASSWORD SCREEN
   if (passwordRequired && isProtectedRoom) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-background p-6">
@@ -226,7 +221,9 @@ export default function Chat() {
             if (passwordInput.trim() === SPECIAL_PASSWORD) {
               setPasswordRequired(false);
               setLocation(
-                `/chat/${roomCode}?pass=${encodeURIComponent(SPECIAL_PASSWORD)}`
+                `/chat/${roomCode}?password=${encodeURIComponent(
+                  SPECIAL_PASSWORD!
+                )}`
               );
             } else {
               toast({
@@ -242,7 +239,7 @@ export default function Chat() {
     );
   }
 
-  // Loading screen
+  // LOADING SCREEN
   if (isConnecting) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
@@ -254,6 +251,7 @@ export default function Chat() {
     );
   }
 
+  // ERROR SCREEN
   if (connectionError) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
