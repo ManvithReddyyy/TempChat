@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState } from "react"; 
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ export default function Home() {
   // Join Room
   const handleJoinRoom = () => {
     const code = joinCode.trim().toUpperCase();
+
     if (code.length !== 6) {
       toast({
         title: "Invalid Code",
@@ -82,7 +83,7 @@ export default function Home() {
                 cx="9"
                 cy="20"
                 r="2"
-                className="origin-center transition group-hover:animate-spin-l"
+                className="origin-center wheel-roll transition"
               />
 
               {/* Right wheel */}
@@ -90,7 +91,7 @@ export default function Home() {
                 cx="17"
                 cy="20"
                 r="2"
-                className="origin-center transition group-hover:animate-spin-r"
+                className="origin-center wheel-roll transition"
               />
             </svg>
           </button>
@@ -142,7 +143,7 @@ export default function Home() {
             <Button
               onClick={handleCreateRoom}
               disabled={isCreating}
-              className="w-full py-6 text-lg shadow-sm hover:scale-[1.02] transition duration-300"
+              className="w-full shadow-sm hover:scale-[1.02] transition duration-300"
             >
               {isCreating ? "Creating..." : "Create New Room"}
             </Button>
@@ -175,7 +176,7 @@ export default function Home() {
               <Button
                 onClick={handleJoinRoom}
                 variant="secondary"
-                className="w-full py-6 text-lg shadow-sm hover:scale-[1.02] transition duration-300"
+                className="w-full shadow-sm hover:scale-[1.02] transition duration-300"
               >
                 Join Room
               </Button>

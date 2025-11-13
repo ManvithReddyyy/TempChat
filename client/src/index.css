@@ -197,22 +197,18 @@
  */
 
 
- @keyframes spinLeft {
+@keyframes wheelRoll {
   0% { transform: rotate(0deg); }
-  100% { transform: rotate(-360deg); }
+  100% { transform: rotate(180deg); }
 }
 
-@keyframes spinRight {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+/* Slight slow, feels like rolling movement */
+.wheel-roll {
+  transition: transform 0.3s ease;
 }
 
-.animate-spin-l {
-  animation: spinLeft 0.4s linear infinite;
-}
-
-.animate-spin-r {
-  animation: spinRight 0.4s linear infinite;
+.group:hover .wheel-roll {
+  animation: wheelRoll 0.6s linear infinite;
 }
 
 
