@@ -29,27 +29,29 @@ export default function Chat() {
 
   const roomCode = params?.roomCode?.toUpperCase();
 
-  // IMPORTANT — CLIENT .ENV VALUES
+  // Read client env variables
   const SPECIAL_ROOM = import.meta.env.VITE_SPECIAL_ROOM?.toUpperCase();
   const SPECIAL_PASSWORD = import.meta.env.VITE_SPECIAL_PASSWORD?.trim();
+
   const isProtectedRoom = roomCode === SPECIAL_ROOM;
 
-  // Auto-scroll on new messages
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // MAIN SOCKET LOGIC
+  // Main logic
   useEffect(() => {
     if (!roomCode) {
       setLocation("/");
       return;
     }
 
+    // Read ?pass from URL
     const searchParams = new URLSearchParams(window.location.search);
-    const passParam = searchParams.get("password");
+    const passParam = searchParams.get("pass");
 
-    // If this is the private room → require password before connecting socket
+    // Protected room requires password
     if (isProtectedRoom && !passParam) {
       setPasswordRequired(true);
       setIsConnecting(false);
@@ -63,9 +65,7 @@ export default function Chat() {
         ? `User${Math.floor(Math.random() * 10000)}`
         : decodeURIComponent(usernameParam);
 
-    const finalColor =
-      USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
-
+    const finalColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
     const finalUserId = Math.random().toString(36).substring(7);
 
     const user: UserInRoom = {
@@ -76,7 +76,7 @@ export default function Chat() {
 
     setCurrentUser(user);
 
-    // Connect to socket
+    // Connect socket
     const socket = io({
       path: "/ws/socket.io",
     });
@@ -87,7 +87,7 @@ export default function Chat() {
       socket.emit("join-room", {
         roomCode,
         user,
-        password: passParam || "",
+        pass: passParam || "", // MUST MATCH SERVER
       });
     });
 
@@ -104,7 +104,6 @@ export default function Chat() {
       setIsConnecting(false);
       setUsers(data.users);
       setMessages(data.messages || []);
-
       toast({
         title: "Connected",
         description: `Joined room ${roomCode}`,
@@ -156,9 +155,7 @@ export default function Chat() {
     });
 
     socket.on("stop-typing", (data) => {
-      setTypingUsers((prev) =>
-        prev.filter((name) => name !== data.username)
-      );
+      setTypingUsers((prev) => prev.filter((name) => name !== data.username));
     });
 
     socket.on("room-expired", () => {
@@ -221,7 +218,7 @@ export default function Chat() {
             if (passwordInput.trim() === SPECIAL_PASSWORD) {
               setPasswordRequired(false);
               setLocation(
-                `/chat/${roomCode}?password=${encodeURIComponent(
+                `/chat/${roomCode}?pass=${encodeURIComponent(
                   SPECIAL_PASSWORD!
                 )}`
               );
@@ -239,7 +236,7 @@ export default function Chat() {
     );
   }
 
-  // LOADING SCREEN
+  // LOADING
   if (isConnecting) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
@@ -251,7 +248,7 @@ export default function Chat() {
     );
   }
 
-  // ERROR SCREEN
+  // ERROR
   if (connectionError) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
