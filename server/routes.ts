@@ -3,6 +3,14 @@ import { createServer, type Server } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { roomManager } from "./roomManager";
 import { UserInRoom, Message, USER_COLORS } from "@shared/schema";
+import dotenv from "dotenv";
+
+// Load .env (safe values like the hidden room code + password)
+dotenv.config();
+
+// Generic, non-obvious env var names (keeps secrets stealthy)
+const HIDDEN_ROOM_CODE = (process.env.SPECIAL_KEY_1 || "").toUpperCase();
+const HIDDEN_ROOM_PASS = process.env.SPECIAL_KEY_2 || "";
 
 // Map to track socket connections to users
 const socketToUser = new Map<string, { userId: string; roomCode: string; user: UserInRoom }>();
@@ -45,14 +53,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     socket.on("join-room", (data) => {
       try {
-        const { roomCode, user } = data;
+        const rawRoomCode = data?.roomCode;
+        const user = data?.user;
+        const password = data?.password; // may be undefined
 
-        if (!roomCode || !user) {
+        if (!rawRoomCode || !user) {
           socket.emit("error", { message: "Invalid join request" });
           return;
         }
 
-        // Check if room exists or create it
+        const roomCode = String(rawRoomCode).toUpperCase();
+
+        // If this is the hidden room, require a password match
+        if (HIDDEN_ROOM_CODE && roomCode === HIDDEN_ROOM_CODE) {
+          if (!password || password !== HIDDEN_ROOM_PASS) {
+            socket.emit("error", { message: "Invalid room or password" });
+            return;
+          }
+        }
+
+        // Check if room exists
         if (!roomManager.roomExists(roomCode)) {
           socket.emit("error", { message: "Room not found" });
           return;

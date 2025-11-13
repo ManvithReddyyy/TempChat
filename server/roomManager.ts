@@ -1,11 +1,14 @@
-import { Room, Message, UserInRoom, USER_COLORS } from "@shared/schema";
+import { Room, Message, UserInRoom } from "@shared/schema";
+import dotenv from "dotenv";
 
-// 30 minutes
+dotenv.config();
+
+// Hidden secret room values
+const hiddenKey = process.env.SPECIAL_KEY_1 || "";
+const hiddenPass = process.env.SPECIAL_KEY_2 || "";
+
+// 30 minutes timeout
 const ROOM_INACTIVITY_TIMEOUT = 30 * 60 * 1000;
-
-// Imported from the shop system
-// If you moved this to its own module, import it instead.
-export const permanentRooms = new Map<string, { purchasedAt: number }>();
 
 interface RoomData {
   room: Room;
@@ -19,20 +22,32 @@ class RoomManager {
   private rooms: Map<string, RoomData> = new Map();
   private onRoomExpiredCallbacks: RoomExpiredCallback[] = [];
 
-  // Generate random code
+  constructor() {
+    if (hiddenKey) {
+      console.log("Loaded protected room");
+    }
+  }
+
+  // Password check ONLY for hidden room
+  validatePassword(code: string, pass?: string): boolean {
+    if (code !== hiddenKey) return true; // normal rooms don't need password
+    return pass === hiddenPass;
+  }
+
   generateRoomCode(): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let code = "";
     for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    if (this.rooms.has(code) || permanentRooms.has(code)) {
+
+    if (this.rooms.has(code) || code === hiddenKey) {
       return this.generateRoomCode();
     }
+
     return code;
   }
 
-  // Create new temp room
   createRoom(): string {
     const code = this.generateRoomCode();
     const now = Date.now();
@@ -56,8 +71,17 @@ class RoomManager {
     return code;
   }
 
-  // Fetch room
+  // Virtual room for hidden key
   getRoom(code: string): Room | undefined {
+    if (code === hiddenKey) {
+      return {
+        code,
+        createdAt: Date.now(),
+        lastActivity: Date.now(),
+        users: [],
+      };
+    }
+
     const d = this.rooms.get(code);
     return d?.room;
   }
@@ -67,12 +91,12 @@ class RoomManager {
     return d?.messages || [];
   }
 
-  // Add user
   addUser(code: string, user: UserInRoom): boolean {
+    if (code === hiddenKey) return true; // don't store
+
     const d = this.rooms.get(code);
     if (!d) return false;
 
-    // Skip duplicate users
     if (!d.room.users.find((u) => u.id === user.id)) {
       d.room.users.push(user);
     }
@@ -81,8 +105,9 @@ class RoomManager {
     return true;
   }
 
-  // Remove user
   removeUser(code: string, userId: string): UserInRoom | undefined {
+    if (code === hiddenKey) return;
+
     const d = this.rooms.get(code);
     if (!d) return;
 
@@ -93,8 +118,7 @@ class RoomManager {
 
     this.updateRoomActivity(code);
 
-    // If temporary room AND empty → delete
-    if (!permanentRooms.has(code) && d.room.users.length === 0) {
+    if (d.room.users.length === 0) {
       this.deleteRoom(code);
     }
 
@@ -102,32 +126,29 @@ class RoomManager {
   }
 
   getUsers(code: string): UserInRoom[] {
+    if (code === hiddenKey) return [];
     const d = this.rooms.get(code);
     return d?.room.users || [];
   }
 
   addMessage(code: string, message: Message): boolean {
+    if (code === hiddenKey) return true;
+
     const d = this.rooms.get(code);
     if (!d) return false;
 
     d.messages.push(message);
-
     this.updateRoomActivity(code);
-
     return true;
   }
 
-  // Update timestamp + reset timeout
   private updateRoomActivity(code: string) {
+    if (code === hiddenKey) return;
+
     const d = this.rooms.get(code);
     if (!d) return;
 
     d.room.lastActivity = Date.now();
-
-    // Permanent rooms do NOT have timeouts
-    if (permanentRooms.has(code)) {
-      return;
-    }
 
     clearTimeout(d.timeoutId);
     d.timeoutId = this.setRoomTimeout(code);
@@ -137,17 +158,11 @@ class RoomManager {
     this.onRoomExpiredCallbacks.push(cb);
   }
 
-  // Auto delete after 30 min inactivity
   private setRoomTimeout(code: string): NodeJS.Timeout {
     return setTimeout(() => {
-      // Permanent room → DO NOT DELETE
-      if (permanentRooms.has(code)) {
-        console.log(`Permanent room ${code} skipped expiration.`);
-        return;
-      }
+      if (code === hiddenKey) return;
 
       console.log(`Room ${code} expired due to inactivity`);
-
       const d = this.rooms.get(code);
       if (d) {
         clearTimeout(d.timeoutId);
@@ -158,12 +173,8 @@ class RoomManager {
     }, ROOM_INACTIVITY_TIMEOUT);
   }
 
-  // Manual delete (does nothing for permanent rooms)
   deleteRoom(code: string) {
-    if (permanentRooms.has(code)) {
-      console.log(`Room ${code} is permanent → NOT deleted.`);
-      return;
-    }
+    if (code === hiddenKey) return;
 
     const d = this.rooms.get(code);
     if (d) {
@@ -175,7 +186,8 @@ class RoomManager {
   }
 
   roomExists(code: string): boolean {
-    return this.rooms.has(code) || permanentRooms.has(code);
+    if (code === hiddenKey) return true;
+    return this.rooms.has(code);
   }
 
   getActiveRooms(): string[] {

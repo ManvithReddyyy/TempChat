@@ -3,21 +3,27 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import shopRoutes from "./shopRoutes";   // <-- ADDED
+import shopRoutes from "./shopRoutes";
+
+// Load environment variables (hidden permanent room code + password)
+import dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
 
-declare module 'http' {
+declare module "http" {
   interface IncomingMessage {
-    rawBody: unknown
+    rawBody: unknown;
   }
 }
 
-app.use(express.json({
-  verify: (req, _res, buf) => {
-    req.rawBody = buf;
-  }
-}));
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 app.use(express.urlencoded({ extended: false }));
 
@@ -37,6 +43,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -53,15 +60,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-
-  // Register TempChat routes (rooms, sockets)
+  // Register all TempChat system routes (including sockets)
   const server = await registerRoutes(app);
 
-  // 🔥 ADD SHOP ROUTES BEFORE VITE/STATIC
-  // These must come BEFORE the catch-all Vite middleware
+  // -------------------------------------------------------
+  // 🔥 IMPORTANT: Register shop routes early (to avoid conflicts)
+  // -------------------------------------------------------
   app.use("/api/shop", shopRoutes);
 
-  // Error handler
+  // Global error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -70,15 +77,19 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // Vite dev mode or static production mode
+  // Development → Vite middleware
+  // Production → static build
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // Start server (Render-compatible)
-  const port = parseInt(process.env.PORT || '5000', 10);
+  // -------------------------------------------------------
+  // 🔥 Start server normally (Render requires 0.0.0.0)
+  // -------------------------------------------------------
+  const port = parseInt(process.env.PORT || "5000", 10);
+
   server.listen(
     {
       port,
@@ -89,5 +100,4 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
     }
   );
-
 })();
