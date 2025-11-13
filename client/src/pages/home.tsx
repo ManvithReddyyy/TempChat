@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { MessageSquare } from "lucide-react";
+import { Link } from "wouter";
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -64,9 +65,54 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
+
+      {/* SHOP ICON TOP RIGHT */}
+      <div className="absolute top-4 right-4 z-50">
+        <Link href="/shop">
+          <button
+            className="p-2 rounded-full hover:bg-accent transition group"
+            aria-label="Shop"
+          >
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="stroke-primary group-hover:stroke-primary/80 transition"
+            >
+              {/* Cart Body */}
+              <path
+                d="M3 3h2l3.6 9.59a1 1 0 0 0 .93.65h7.92a1 1 0 0 0 .96-.74l2.1-7.26H6"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {/* Left Wheel */}
+              <circle
+                cx="9"
+                cy="20"
+                r="2"
+                strokeWidth="2"
+                className="origin-center group-hover:animate-spin-l"
+              />
+
+              {/* Right Wheel */}
+              <circle
+                cx="17"
+                cy="20"
+                r="2"
+                strokeWidth="2"
+                className="origin-center group-hover:animate-spin-r"
+              />
+            </svg>
+          </button>
+        </Link>
+      </div>
+
       <div className="w-full max-w-md mx-auto">
-        
+
         {/* HEADER */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
@@ -80,7 +126,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* CARD */}
+        {/* MAIN CARD */}
         <Card className="shadow-lg">
           <CardHeader className="space-y-1">
             <CardTitle className="text-xl">Get Started</CardTitle>
@@ -91,7 +137,7 @@ export default function Home() {
 
           <CardContent className="space-y-6">
 
-            {/* USERNAME INPUT (Matches Room Code Styling) */}
+            {/* USERNAME */}
             <div className="space-y-2">
               <Label htmlFor="username" className="text-sm font-medium">
                 Username (optional)
@@ -107,7 +153,7 @@ export default function Home() {
               />
             </div>
 
-            {/* CREATE ROOM BUTTON */}
+            {/* CREATE ROOM */}
             <div className="space-y-3">
               <Button
                 onClick={handleCreateRoom}
@@ -130,10 +176,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* JOIN ROOM SECTION */}
+            {/* JOIN ROOM */}
             <div className="space-y-3">
-
-              {/* ROOM CODE INPUT */}
               <div className="space-y-2">
                 <Label htmlFor="room-code" className="text-sm font-medium">
                   Room Code
@@ -151,7 +195,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* JOIN BUTTON */}
               <Button
                 onClick={handleJoinRoom}
                 variant="secondary"
@@ -162,6 +205,7 @@ export default function Home() {
                 Join Room
               </Button>
             </div>
+
           </CardContent>
         </Card>
 

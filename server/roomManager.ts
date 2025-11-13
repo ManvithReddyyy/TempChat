@@ -1,7 +1,11 @@
 import { Room, Message, UserInRoom, USER_COLORS } from "@shared/schema";
 
-// Room inactivity timeout (30 minutes)
+// 30 minutes
 const ROOM_INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+
+// Imported from the shop system
+// If you moved this to its own module, import it instead.
+export const permanentRooms = new Map<string, { purchasedAt: number }>();
 
 interface RoomData {
   room: Room;
@@ -15,25 +19,24 @@ class RoomManager {
   private rooms: Map<string, RoomData> = new Map();
   private onRoomExpiredCallbacks: RoomExpiredCallback[] = [];
 
-  // Generate a random 6-digit room code
+  // Generate random code
   generateRoomCode(): string {
-    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let code = "";
     for (let i = 0; i < 6; i++) {
-      code += characters.charAt(Math.floor(Math.random() * characters.length));
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    // Ensure uniqueness
-    if (this.rooms.has(code)) {
+    if (this.rooms.has(code) || permanentRooms.has(code)) {
       return this.generateRoomCode();
     }
     return code;
   }
 
-  // Create a new room
+  // Create new temp room
   createRoom(): string {
     const code = this.generateRoomCode();
     const now = Date.now();
-    
+
     const room: Room = {
       code,
       createdAt: now,
@@ -53,129 +56,128 @@ class RoomManager {
     return code;
   }
 
-  // Get room by code
+  // Fetch room
   getRoom(code: string): Room | undefined {
-    const roomData = this.rooms.get(code);
-    return roomData?.room;
+    const d = this.rooms.get(code);
+    return d?.room;
   }
 
-  // Get messages for a room
   getMessages(code: string): Message[] {
-    const roomData = this.rooms.get(code);
-    return roomData?.messages || [];
+    const d = this.rooms.get(code);
+    return d?.messages || [];
   }
 
-  // Add user to room
+  // Add user
   addUser(code: string, user: UserInRoom): boolean {
-    const roomData = this.rooms.get(code);
-    if (!roomData) {
-      return false;
-    }
+    const d = this.rooms.get(code);
+    if (!d) return false;
 
-    // Check if user already exists
-    const existingUser = roomData.room.users.find(u => u.id === user.id);
-    if (!existingUser) {
-      roomData.room.users.push(user);
+    // Skip duplicate users
+    if (!d.room.users.find((u) => u.id === user.id)) {
+      d.room.users.push(user);
     }
 
     this.updateRoomActivity(code);
     return true;
   }
 
-  // Remove user from room
+  // Remove user
   removeUser(code: string, userId: string): UserInRoom | undefined {
-    const roomData = this.rooms.get(code);
-    if (!roomData) {
-      return undefined;
-    }
+    const d = this.rooms.get(code);
+    if (!d) return;
 
-    const userIndex = roomData.room.users.findIndex(u => u.id === userId);
-    if (userIndex === -1) {
-      return undefined;
-    }
+    const idx = d.room.users.findIndex((u) => u.id === userId);
+    if (idx === -1) return;
 
-    const [removedUser] = roomData.room.users.splice(userIndex, 1);
+    const [removed] = d.room.users.splice(idx, 1);
+
     this.updateRoomActivity(code);
 
-    // Delete room if no users left
-    if (roomData.room.users.length === 0) {
+    // If temporary room AND empty → delete
+    if (!permanentRooms.has(code) && d.room.users.length === 0) {
       this.deleteRoom(code);
     }
 
-    return removedUser;
+    return removed;
   }
 
-  // Get users in a room
   getUsers(code: string): UserInRoom[] {
-    const roomData = this.rooms.get(code);
-    return roomData?.room.users || [];
+    const d = this.rooms.get(code);
+    return d?.room.users || [];
   }
 
-  // Add message to room
   addMessage(code: string, message: Message): boolean {
-    const roomData = this.rooms.get(code);
-    if (!roomData) {
-      return false;
-    }
+    const d = this.rooms.get(code);
+    if (!d) return false;
 
-    roomData.messages.push(message);
+    d.messages.push(message);
+
     this.updateRoomActivity(code);
+
     return true;
   }
 
-  // Update room activity timestamp and reset timeout
-  private updateRoomActivity(code: string): void {
-    const roomData = this.rooms.get(code);
-    if (!roomData) {
+  // Update timestamp + reset timeout
+  private updateRoomActivity(code: string) {
+    const d = this.rooms.get(code);
+    if (!d) return;
+
+    d.room.lastActivity = Date.now();
+
+    // Permanent rooms do NOT have timeouts
+    if (permanentRooms.has(code)) {
       return;
     }
 
-    roomData.room.lastActivity = Date.now();
-
-    // Clear existing timeout
-    clearTimeout(roomData.timeoutId);
-
-    // Set new timeout
-    roomData.timeoutId = this.setRoomTimeout(code);
+    clearTimeout(d.timeoutId);
+    d.timeoutId = this.setRoomTimeout(code);
   }
 
-  // Register a callback for when rooms expire
-  onRoomExpired(callback: RoomExpiredCallback): void {
-    this.onRoomExpiredCallbacks.push(callback);
+  onRoomExpired(cb: RoomExpiredCallback) {
+    this.onRoomExpiredCallbacks.push(cb);
   }
 
-  // Set room timeout for automatic deletion
+  // Auto delete after 30 min inactivity
   private setRoomTimeout(code: string): NodeJS.Timeout {
     return setTimeout(() => {
-      console.log(`Room ${code} expired due to inactivity`);
-      const roomData = this.rooms.get(code);
-      if (roomData) {
-        // Delete room FIRST to prevent new joins during expiration
-        clearTimeout(roomData.timeoutId);
-        this.rooms.delete(code);
-        console.log(`Room deleted: ${code}`);
-        // THEN notify all registered callbacks after room is deleted
-        this.onRoomExpiredCallbacks.forEach(callback => callback(code));
+      // Permanent room → DO NOT DELETE
+      if (permanentRooms.has(code)) {
+        console.log(`Permanent room ${code} skipped expiration.`);
+        return;
       }
+
+      console.log(`Room ${code} expired due to inactivity`);
+
+      const d = this.rooms.get(code);
+      if (d) {
+        clearTimeout(d.timeoutId);
+        this.rooms.delete(code);
+      }
+
+      this.onRoomExpiredCallbacks.forEach((cb) => cb(code));
     }, ROOM_INACTIVITY_TIMEOUT);
   }
 
-  // Delete a room (public method for manual deletion)
-  deleteRoom(code: string): void {
-    const roomData = this.rooms.get(code);
-    if (roomData) {
-      clearTimeout(roomData.timeoutId);
-      this.rooms.delete(code);
-      console.log(`Room deleted: ${code}`);
+  // Manual delete (does nothing for permanent rooms)
+  deleteRoom(code: string) {
+    if (permanentRooms.has(code)) {
+      console.log(`Room ${code} is permanent → NOT deleted.`);
+      return;
     }
+
+    const d = this.rooms.get(code);
+    if (d) {
+      clearTimeout(d.timeoutId);
+      this.rooms.delete(code);
+    }
+
+    console.log(`Room deleted: ${code}`);
   }
 
-  // Check if room exists
   roomExists(code: string): boolean {
-    return this.rooms.has(code);
+    return this.rooms.has(code) || permanentRooms.has(code);
   }
 
-  // Get all active room codes (for debugging)
   getActiveRooms(): string[] {
     return Array.from(this.rooms.keys());
   }

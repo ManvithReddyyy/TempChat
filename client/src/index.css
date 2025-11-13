@@ -195,6 +195,27 @@
  * Even without handling focused or not, this is six possible combinations that
  * need to be distinguished from eachother visually.
  */
+
+
+ @keyframes spinLeft {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+@keyframes spinRight {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-spin-l {
+  animation: spinLeft 0.4s linear infinite;
+}
+
+.animate-spin-r {
+  animation: spinRight 0.4s linear infinite;
+}
+
+
 @layer utilities {
 
   /* Hide ugly search cancel button in Chrome until we can style it properly */
