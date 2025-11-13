@@ -7,18 +7,18 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Hidden secret room
+// Hidden secret room credentials
 const HIDDEN_ROOM_CODE = (process.env.SPECIAL_KEY_1 || "").toUpperCase();
-const HIDDEN_ROOM_PASS = process.env.SPECIAL_KEY_2 || "";
+const HIDDEN_ROOM_PASS = (process.env.SPECIAL_KEY_2 || "").trim();
 
-// Map socket → user
+// Map socket → user data
 const socketToUser = new Map<
   string,
   { userId: string; roomCode: string; user: UserInRoom }
 >();
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Create normal room
+  // Public endpoint: create temporary room
   app.post("/api/create-room", (req, res) => {
     try {
       const roomCode = roomManager.createRoom();
@@ -35,7 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     cors: { origin: "*", methods: ["GET", "POST"] }
   });
 
-  // Room expiration cleanup
+  // Auto-expire old rooms
   roomManager.onRoomExpired((roomCode) => {
     io.to(roomCode).emit("room-expired");
     io.in(roomCode).disconnectSockets();
@@ -44,41 +44,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   io.on("connection", (socket) => {
     console.log("Socket connected:", socket.id);
 
+    // JOIN ROOM
     socket.on("join-room", (data) => {
       try {
         const roomCode = String(data?.roomCode || "").toUpperCase();
         const user = data?.user;
-        const password = data?.pass; // <-- CLIENT SENDS pass !!
+
+        // ❗ THIS IS THE CRITICAL FIX
+        const password = data?.password;  // <--- MUST MATCH CLIENT
 
         if (!roomCode || !user) {
           socket.emit("error", { message: "Invalid join request" });
           return;
         }
 
-        // Protected room password logic
+        // Private hidden room
         if (roomCode === HIDDEN_ROOM_CODE) {
-          if (!password || password.trim() !== HIDDEN_ROOM_PASS.trim()) {
+          if (!password || password.trim() !== HIDDEN_ROOM_PASS) {
             socket.emit("invalid-password");
             return;
           }
         }
 
-        // Normal room?
+        // Normal rooms
         if (!roomManager.roomExists(roomCode)) {
           socket.emit("error", { message: "Room not found" });
           return;
         }
 
-        // Add user
-        const okay = roomManager.addUser(roomCode, user);
-        if (!okay) {
+        if (!roomManager.addUser(roomCode, user)) {
           socket.emit("error", { message: "Failed to join room" });
           return;
         }
 
-        // Save socket-user link
         socketToUser.set(socket.id, { userId: user.id, roomCode, user });
-
         socket.join(roomCode);
 
         const messages = roomManager.getMessages(roomCode);
@@ -102,7 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Sending messages
+    // SEND MESSAGE
     socket.on("send-message", (data) => {
       const userInfo = socketToUser.get(socket.id);
       if (!userInfo) return;
@@ -125,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       io.to(roomCode).emit("receive-message", { message: msg });
     });
 
-    // Typing events
+    // TYPING
     socket.on("typing", (data) => {
       const userInfo = socketToUser.get(socket.id);
       if (!userInfo || userInfo.roomCode !== data.roomCode) return;
@@ -146,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     });
 
-    // Disconnect
+    // DISCONNECT
     socket.on("disconnect", () => {
       const info = socketToUser.get(socket.id);
       if (!info) return;

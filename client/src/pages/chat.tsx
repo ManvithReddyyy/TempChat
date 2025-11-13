@@ -29,10 +29,9 @@ export default function Chat() {
 
   const roomCode = params?.roomCode?.toUpperCase();
 
-  // Read client env variables
+  // Client env
   const SPECIAL_ROOM = import.meta.env.VITE_SPECIAL_ROOM?.toUpperCase();
   const SPECIAL_PASSWORD = import.meta.env.VITE_SPECIAL_PASSWORD?.trim();
-
   const isProtectedRoom = roomCode === SPECIAL_ROOM;
 
   // Auto-scroll
@@ -40,18 +39,16 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Main logic
   useEffect(() => {
     if (!roomCode) {
       setLocation("/");
       return;
     }
 
-    // Read ?pass from URL
     const searchParams = new URLSearchParams(window.location.search);
-    const passParam = searchParams.get("pass");
+    const passParam = searchParams.get("password");
 
-    // Protected room requires password
+    // Ask password first
     if (isProtectedRoom && !passParam) {
       setPasswordRequired(true);
       setIsConnecting(false);
@@ -65,7 +62,8 @@ export default function Chat() {
         ? `User${Math.floor(Math.random() * 10000)}`
         : decodeURIComponent(usernameParam);
 
-    const finalColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+    const finalColor =
+      USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
     const finalUserId = Math.random().toString(36).substring(7);
 
     const user: UserInRoom = {
@@ -87,7 +85,7 @@ export default function Chat() {
       socket.emit("join-room", {
         roomCode,
         user,
-        pass: passParam || "", // MUST MATCH SERVER
+        password: passParam || "",   // <-- FIXED!
       });
     });
 
@@ -104,10 +102,6 @@ export default function Chat() {
       setIsConnecting(false);
       setUsers(data.users);
       setMessages(data.messages || []);
-      toast({
-        title: "Connected",
-        description: `Joined room ${roomCode}`,
-      });
     });
 
     socket.on("user-joined", (data) => {
@@ -155,13 +149,15 @@ export default function Chat() {
     });
 
     socket.on("stop-typing", (data) => {
-      setTypingUsers((prev) => prev.filter((name) => name !== data.username));
+      setTypingUsers((prev) =>
+        prev.filter((name) => name !== data.username)
+      );
     });
 
     socket.on("room-expired", () => {
       toast({
         title: "Room Expired",
-        description: "Messages cleared after inactivity",
+        description: "Messages cleared.",
         variant: "destructive",
       });
     });
@@ -177,14 +173,12 @@ export default function Chat() {
     };
   }, [roomCode, isProtectedRoom, setLocation, toast]);
 
-  // Send message
   const sendMessage = (content: string) => {
     if (socketRef.current?.connected && currentUser) {
       socketRef.current.emit("send-message", { roomCode, content });
     }
   };
 
-  // Typing indicator
   const handleTypingChange = (isTyping: boolean) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit(isTyping ? "typing" : "stop-typing", {
@@ -218,15 +212,12 @@ export default function Chat() {
             if (passwordInput.trim() === SPECIAL_PASSWORD) {
               setPasswordRequired(false);
               setLocation(
-                `/chat/${roomCode}?pass=${encodeURIComponent(
+                `/chat/${roomCode}?password=${encodeURIComponent(
                   SPECIAL_PASSWORD!
                 )}`
               );
             } else {
-              toast({
-                title: "Incorrect Password",
-                variant: "destructive",
-              });
+              toast({ title: "Incorrect Password", variant: "destructive" });
             }
           }}
         >
@@ -236,31 +227,20 @@ export default function Chat() {
     );
   }
 
-  // LOADING
   if (isConnecting) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-muted-foreground">Connecting to room...</p>
-        </div>
+        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+        <p>Connecting...</p>
       </div>
     );
   }
 
-  // ERROR
   if (connectionError) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-md">
-          <p className="text-destructive mb-4">{connectionError}</p>
-          <p className="text-muted-foreground">Redirecting...</p>
-        </div>
-      </div>
-    );
+    return <div>Error: {connectionError}</div>;
   }
 
-  // MAIN CHAT UI
+  // MAIN UI
   return (
     <div className="h-screen flex flex-col bg-background">
       <ChatHeader
@@ -271,27 +251,18 @@ export default function Chat() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto p-6 md:px-8">
-          {messages.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">
-                No messages yet. Start the conversation!
-              </p>
-            </div>
-          ) : (
-            messages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                isOwnMessage={message.userId === currentUser?.id}
-              />
-            ))
-          )}
+          {messages.map((message) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              isOwnMessage={message.userId === currentUser?.id}
+            />
+          ))}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
       <TypingIndicator typingUsers={typingUsers} />
-
       <ChatInput
         onSendMessage={sendMessage}
         onTypingChange={handleTypingChange}
