@@ -197,18 +197,15 @@
  */
 
 
-@keyframes wheelRoll {
+/* Realistic rolling wheel motion */
+@keyframes wheelRollReal {
   0% { transform: rotate(0deg); }
-  100% { transform: rotate(180deg); }
+  100% { transform: rotate(45deg); } /* small rotation only */
 }
 
-/* Slight slow, feels like rolling movement */
-.wheel-roll {
-  transition: transform 0.3s ease;
-}
-
+/* Hover effect */
 .group:hover .wheel-roll {
-  animation: wheelRoll 0.6s linear infinite;
+  animation: wheelRollReal 0.35s linear infinite;
 }
 
 

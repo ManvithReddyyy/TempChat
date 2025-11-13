@@ -83,7 +83,7 @@ export default function Home() {
                 cx="9"
                 cy="20"
                 r="2"
-                className="origin-center wheel-roll transition"
+                className="origin-center wheel-roll"
               />
 
               {/* Right wheel */}
@@ -91,7 +91,7 @@ export default function Home() {
                 cx="17"
                 cy="20"
                 r="2"
-                className="origin-center wheel-roll transition"
+                className="origin-center wheel-roll"
               />
             </svg>
           </button>
