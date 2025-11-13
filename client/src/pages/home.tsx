@@ -26,7 +26,13 @@ export default function Home() {
       }
 
       const data = await response.json();
-      setLocation(`/chat/${data.roomCode}`);
+
+      // FIX: add username support for creators
+      const finalName =
+        username.trim() === "" ? "random" : encodeURIComponent(username.trim());
+
+      setLocation(`/chat/${data.roomCode}?username=${finalName}`);
+
     } catch (error) {
       toast({
         title: "Error",
