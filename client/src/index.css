@@ -196,19 +196,6 @@
  * need to be distinguished from eachother visually.
  */
 
-
-/* Realistic rolling wheel motion */
-@keyframes wheelRollReal {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(45deg); } /* small rotation only */
-}
-
-/* Hover effect */
-.group:hover .wheel-roll {
-  animation: wheelRollReal 0.35s linear infinite;
-}
-
-
 @layer utilities {
 
   /* Hide ugly search cancel button in Chrome until we can style it properly */

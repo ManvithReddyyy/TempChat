@@ -56,47 +56,39 @@ export default function Home() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
 
       {/* SHOP ICON — TOP RIGHT */}
-      <div className="absolute top-4 right-4 z-50">
-        <Link href="/shop">
-          <button
-            aria-label="Shop"
-            className="p-2 rounded-full hover:bg-accent transition-all duration-300 group"
-          >
-            <svg
-              width="34"
-              height="34"
-              viewBox="0 0 24 24"
-              fill="none"
-              strokeWidth="2"
-              stroke="currentColor"
-              className="text-primary transition-all duration-300 group-hover:text-primary/80"
-            >
-              {/* Cart body */}
-              <path
-                d="M3 3h2l3.6 9.59a1 1 0 0 0 .93.65h7.92a1 1 0 0 0 .96-.74l2.1-7.26H6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+      {/* SHOP ICON — TOP RIGHT */}
+<div className="absolute top-4 right-4 z-50">
+  <Link href="/shop">
+    <button
+      aria-label="Shop"
+      className="p-2 rounded-full hover:bg-accent transition-all duration-300"
+    >
+      <svg
+        width="34"
+        height="34"
+        viewBox="0 0 24 24"
+        fill="none"
+        strokeWidth="2"
+        stroke="currentColor"
+        className="text-primary transition-all duration-300 hover:text-primary/80"
+      >
+        {/* Cart body */}
+        <path
+          d="M3 3h2l3.6 9.59a1 1 0 0 0 .93.65h7.92a1 1 0 0 0 .96-.74l2.1-7.26H6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
 
-              {/* Left wheel */}
-              <circle
-                cx="9"
-                cy="20"
-                r="2"
-                className="origin-center wheel-roll"
-              />
+        {/* Left wheel */}
+        <circle cx="9" cy="20" r="2" />
 
-              {/* Right wheel */}
-              <circle
-                cx="17"
-                cy="20"
-                r="2"
-                className="origin-center wheel-roll"
-              />
-            </svg>
-          </button>
-        </Link>
-      </div>
+        {/* Right wheel */}
+        <circle cx="17" cy="20" r="2" />
+      </svg>
+    </button>
+  </Link>
+</div>
+
 
       {/* MAIN CONTENT */}
       <div className="w-full max-w-md mx-auto animate-fadeIn">
