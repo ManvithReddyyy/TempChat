@@ -5,7 +5,7 @@ dotenv.config();
 
 // Hidden secret room values (not visible in GitHub because from .env)
 const hiddenKey = (process.env.SPECIAL_KEY_1 || "").toUpperCase();
-const hiddenPass = process.env.SPECIAL_KEY_2 || "";
+const hiddenPass = (process.env.SPECIAL_KEY_2 || "").trim();
 
 // Temporary room inactivity timeout (30 minutes)
 const ROOM_INACTIVITY_TIMEOUT = 30 * 60 * 1000;
@@ -25,6 +25,21 @@ class RoomManager {
   constructor() {
     if (hiddenKey) {
       console.log("Loaded protected room");
+
+      // ❗ FIX: Pre-create the protected room so it can hold users
+      const room: Room = {
+        code: hiddenKey,
+        createdAt: Date.now(),
+        lastActivity: Date.now(),
+        users: [],
+      };
+
+      this.rooms.set(hiddenKey, {
+        room,
+        messages: [], // Will always be empty
+        // Use a non-expiring timeout
+        timeoutId: setTimeout(() => {}, Number.MAX_SAFE_INTEGER),
+      });
     }
   }
 
@@ -83,18 +98,9 @@ class RoomManager {
 
   /**
    * Get room info
-   * Protected room returns a virtual room object (not stored)
    */
   getRoom(code: string): Room | undefined {
-    if (code === hiddenKey) {
-      return {
-        code,
-        createdAt: Date.now(),
-        lastActivity: Date.now(),
-        users: [],
-      };
-    }
-
+    // ❗ FIX: This now works for hidden and normal rooms
     return this.rooms.get(code)?.room;
   }
 
@@ -105,11 +111,9 @@ class RoomManager {
 
   /**
    * Add user to room
-   * Protected room NEVER stores user list
    */
   addUser(code: string, user: UserInRoom): boolean {
-    if (code === hiddenKey) return true; // skip storing
-
+    // ❗ FIX: REMOVED the special check
     const data = this.rooms.get(code);
     if (!data) return false;
 
@@ -122,8 +126,7 @@ class RoomManager {
   }
 
   removeUser(code: string, userId: string): UserInRoom | undefined {
-    if (code === hiddenKey) return; // skip remove
-
+    // ❗ FIX: REMOVED the special check
     const data = this.rooms.get(code);
     if (!data) return;
 
@@ -142,12 +145,13 @@ class RoomManager {
   }
 
   getUsers(code: string): UserInRoom[] {
-    if (code === hiddenKey) return [];
+    // ❗ FIX: REMOVED the special check
     return this.rooms.get(code)?.room.users || [];
   }
 
   addMessage(code: string, message: Message): boolean {
-    if (code === hiddenKey) return true; // do not store
+    // ❗ KEEP THIS: This is correct, do not store messages
+    if (code === hiddenKey) return true;
 
     const data = this.rooms.get(code);
     if (!data) return false;
@@ -161,6 +165,7 @@ class RoomManager {
    * Update last activity and reset timeout
    */
   private updateRoomActivity(code: string) {
+    // ❗ KEEP THIS: This is correct, protected room never expires
     if (code === hiddenKey) return;
 
     const data = this.rooms.get(code);
@@ -181,7 +186,8 @@ class RoomManager {
    */
   private setRoomTimeout(code: string): NodeJS.Timeout {
     return setTimeout(() => {
-      if (code === hiddenKey) return; // protected room never expires
+      // ❗ KEEP THIS: This is correct
+      if (code === hiddenKey) return;
 
       const data = this.rooms.get(code);
       if (data) {
@@ -198,7 +204,8 @@ class RoomManager {
    * Manual delete
    */
   deleteRoom(code: string) {
-    if (code === hiddenKey) return; // cannot delete protected room
+    // ❗ KEEP THIS: This is correct
+    if (code === hiddenKey) return;
 
     const data = this.rooms.get(code);
     if (data) {
@@ -212,7 +219,7 @@ class RoomManager {
    * Check existence
    */
   roomExists(code: string): boolean {
-    if (code === hiddenKey) return true;
+    // ❗ FIX: This now works for both
     return this.rooms.has(code);
   }
 
