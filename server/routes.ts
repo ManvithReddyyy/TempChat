@@ -104,10 +104,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // SEND MESSAGE
     socket.on("send-message", (data) => {
       const userInfo = socketToUser.get(socket.id);
-      if (!userInfo) return;
+
+      // Debug logging to help diagnose why messages may be dropped
+      const incomingRoom = String(data?.roomCode || "");
+      const incomingContent = String(data?.content || "");
+      console.log(`[send-message] socket=${socket.id} incomingRoom=${incomingRoom} hasUserInfo=${!!userInfo}`);
+
+      if (!userInfo) {
+        console.log(`[send-message] Rejected: no user info for socket ${socket.id}`);
+        return;
+      }
 
       const { roomCode, content } = data;
-      if (!content?.trim() || roomCode !== userInfo.roomCode) return;
+
+      if (!content?.trim()) {
+        console.log(`[send-message] Rejected: empty content from ${userInfo.user.username}`);
+        return;
+      }
+
+      if (roomCode !== userInfo.roomCode) {
+        console.log(`[send-message] Rejected: room mismatch (incoming=${roomCode} expected=${userInfo.roomCode})`);
+        return;
+      }
 
       const msg: Message = {
         id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
@@ -122,6 +140,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       roomManager.addMessage(roomCode, msg);
       io.to(roomCode).emit("receive-message", { message: msg });
+
+      console.log(`[send-message] Delivered: ${msg.id} from ${msg.username} to ${roomCode}`);
     });
 
     // TYPING
