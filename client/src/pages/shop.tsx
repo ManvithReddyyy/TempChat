@@ -6,111 +6,108 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
+const GENZ_WORDS = [
+  "SKY", "LIT", "HYPE", "VIBE", "MOON",
+  "NOVA", "ZOOM", "WAVE", "CLOUD", "CYBR",
+  "PINK", "FLY"
+];
+
+const randomGenZCodes = () =>
+  Array.from({ length: 12 }, () => {
+    const word = GENZ_WORDS[Math.floor(Math.random() * GENZ_WORDS.length)];
+    const num = Math.floor(100 + Math.random() * 900);
+    return `${word}${num}`;
+  });
+
 export default function ShopPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
+  // Device ID system
+  let deviceId = localStorage.getItem("deviceId");
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem("deviceId", deviceId);
+  }
 
   const [searchCode, setSearchCode] = useState("");
   const [roomStatus, setRoomStatus] = useState<"available" | "taken" | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
+  const [codes] = useState<string[]>(randomGenZCodes());
 
-  // Check room status
+  // check room
   const checkRoom = async () => {
-    if (searchCode.length !== 6) {
-      toast({
-        title: "Invalid Code",
-        description: "Room code must be 6 characters.",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (searchCode.length !== 6) return;
 
     setIsChecking(true);
+
     try {
       const res = await fetch(`/api/shop/check/${searchCode}`);
       const data = await res.json();
-      setRoomStatus(data.status); // available or taken
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Unable to check room status.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsChecking(false);
+      setRoomStatus(data.status);
+    } catch {
+      toast({ title: "Error", description: "Checking failed", variant: "destructive" });
     }
+
+    setIsChecking(false);
   };
 
-  // Buy a room
+  // buy room
   const buyRoom = async () => {
     setIsBuying(true);
     try {
       const res = await fetch("/api/shop/buy-room", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode: searchCode }),
+        body: JSON.stringify({ roomCode: searchCode, deviceId }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        toast({
-          title: "Error",
-          description: data.error || "Purchase failed.",
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: data.error, variant: "destructive" });
         return;
       }
 
-      toast({
-        title: "Success",
-        description: "Room purchased successfully!",
-      });
-
+      toast({ title: "Success", description: "Room purchased!" });
       setLocation(`/payment?room=${searchCode}`);
 
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Unexpected error.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsBuying(false);
+    } catch {
+      toast({ title: "Error", description: "Unexpected error", variant: "destructive" });
     }
+    setIsBuying(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <div className="min-h-screen p-6 flex flex-col items-center gap-8">
+
+      {/* Main Card */}
       <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle className="text-xl font-bold">Buy a Permanent Room</CardTitle>
         </CardHeader>
-
         <CardContent className="space-y-6">
-          
-          {/* Search Input */}
+
           <div className="space-y-2">
             <Label>Search Room Code</Label>
             <Input
               placeholder="Enter 6-digit room code"
               value={searchCode}
-              onChange={(e) => setSearchCode(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                const val = e.target.value.toUpperCase();
+                setSearchCode(val);
+                if (val.length === 6) checkRoom();
+              }}
               maxLength={6}
               className="text-center font-mono text-lg tracking-wider"
             />
           </div>
 
-          <Button
-            className="w-full"
-            onClick={checkRoom}
-            disabled={isChecking}
-          >
+          <Button className="w-full" onClick={checkRoom} disabled={isChecking}>
             {isChecking ? "Checking..." : "Check Availability"}
           </Button>
 
-          {/* Status */}
           {roomStatus && (
             <div
               className={`p-3 rounded-lg text-center font-medium ${
@@ -121,23 +118,34 @@ export default function ShopPage() {
             >
               {roomStatus === "available"
                 ? "Room is available!"
-                : "Room is already taken"}
+                : "Room is taken"}
             </div>
           )}
 
-          {/* Buy Button */}
           {roomStatus === "available" && (
-            <Button
-              className="w-full"
-              onClick={buyRoom}
-              disabled={isBuying}
-            >
+            <Button className="w-full" onClick={buyRoom} disabled={isBuying}>
               {isBuying ? "Processing..." : "Buy Room"}
             </Button>
           )}
 
         </CardContent>
       </Card>
+
+      {/* GEN Z ROOM CARDS */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full max-w-3xl">
+        {codes.map((code) => (
+          <div
+            key={code}
+            onClick={() => {
+              setSearchCode(code);
+              checkRoom();
+            }}
+            className="cursor-pointer p-4 border rounded-xl shadow-sm hover:shadow-md transition bg-white text-center font-mono text-lg tracking-widest"
+          >
+            {code}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
