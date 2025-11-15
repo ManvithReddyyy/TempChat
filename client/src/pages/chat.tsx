@@ -21,7 +21,7 @@ export default function Chat() {
   const [isConnecting, setIsConnecting] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  const [passwordRequired, setPasswordRequired] = useState(false);
+  const [passwordRequired, setPasswordRequired] = useState(true);
   const [passwordInput, setPasswordInput] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,7 +30,7 @@ export default function Chat() {
   const roomCode = params?.roomCode?.toUpperCase();
 
   // Client env
-  const SPECIAL_ROOM = import.meta.env.VITE_SECRET_ROOM_CODE?.toUpperCase();
+  const SPECIAL_ROOM = import.meta.env.VITE_SPECIAL_ROOM?.toUpperCase();
   const SPECIAL_PASSWORD = import.meta.env.VITE_SPECIAL_PASSWORD?.trim();
   const isProtectedRoom = roomCode === SPECIAL_ROOM;
 

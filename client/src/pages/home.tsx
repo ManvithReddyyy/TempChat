@@ -68,9 +68,9 @@ export default function Home() {
         return;
       }
 
-      // Correct param name → password=
+      // Correct param name → pass=
       setLocation(
-        `/chat/${code}?username=${finalName}&password=${encodeURIComponent(pass)}`
+        `/chat/${code}?username=${finalName}&pass=${encodeURIComponent(pass)}`
       );
       return;
     }
