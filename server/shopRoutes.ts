@@ -1,103 +1,140 @@
 import { Router } from "express";
+import { supabase } from "./supabaseClient";
 
 const router = Router();
 
-// PREMIUM ROOM STORAGE
-interface PurchasedRoom {
-  purchasedAt: number;
-  deviceId: string;
-  canChangePasswordUntil: number;
+// LIST OF GEN-Z SHOP CODES THAT SHOULD NOT BE RANDOMLY GENERATED
+const GENZ_CODES = [
+  "SKY", "LIT", "HYPE", "VIBE", "MOON",
+  "NOVA", "ZOOM", "CLOUD", "WAVE",
+  "CYBR", "PINK", "FLY"
+];
+
+// Prevent random generator from producing these:
+function isBlockedPrefix(code: string) {
+  return GENZ_CODES.some((p) => code.startsWith(p));
 }
 
-const permanentRooms = new Map<string, PurchasedRoom>();
+// -----------------------------
+// CHECK AVAILABILITY
+// -----------------------------
+router.get("/check/:roomCode", async (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
 
-// OPTIONAL: Example taken codes
-// permanentRooms.set("SKY420", { purchasedAt: Date.now(), deviceId: "xx", canChangePasswordUntil: Date.now() });
+  const { data } = await supabase
+    .from("premium_rooms")
+    .select("code")
+    .eq("code", code)
+    .single();
 
-// ---------------------------
-// CHECK ROOM AVAILABILITY
-// ---------------------------
-
-router.get("/check/:roomCode", (req, res) => {
-  const roomCode = req.params.roomCode.toUpperCase();
-
-  if (permanentRooms.has(roomCode)) {
-    return res.json({ status: "taken" });
-  }
-  return res.json({ status: "available" });
+  return res.json({
+    status: data ? "taken" : "available",
+  });
 });
 
-
-// ---------------------------
-// BUY ROOM (DEVICE LOCKED)
-// ---------------------------
-
-router.post("/buy-room", (req, res) => {
+// -----------------------------
+// BUY ROOM (device locked + 48hr window)
+// -----------------------------
+router.post("/buy-room", async (req, res) => {
   const { roomCode, deviceId } = req.body;
 
   if (!roomCode || roomCode.length !== 6)
-    return res.status(400).json({ error: "Invalid room code" });
-
-  if (!deviceId)
-    return res.status(400).json({ error: "No device id provided" });
+    return res.status(400).json({ error: "Invalid code" });
 
   const code = roomCode.toUpperCase();
 
-  if (permanentRooms.has(code))
+  // Check existing
+  const { data: exists } = await supabase
+    .from("premium_rooms")
+    .select("code")
+    .eq("code", code)
+    .single();
+
+  if (exists) {
     return res.status(400).json({ error: "Room already purchased" });
+  }
 
   const now = Date.now();
-  const expires = now + 48 * 60 * 60 * 1000; // 48 hours
+  const expires = now + 48 * 60 * 60 * 1000;
 
-  permanentRooms.set(code, {
-    purchasedAt: now,
-    deviceId,
-    canChangePasswordUntil: expires,
+  await supabase.from("premium_rooms").insert({
+    code,
+    purchased_at: now,
+    device_id: deviceId,
+    can_change_password_until: expires,
   });
 
-  res.json({ success: true });
+  return res.json({ success: true });
 });
 
-
-// ---------------------------
-// CHECK PASSWORD CHANGE ACCESS
-// ---------------------------
-
-router.post("/can-change-password", (req, res) => {
+// -----------------------------
+// DEVICE-BASED + TIME-LIMITED PASSWORD CHANGE CHECK
+// -----------------------------
+router.post("/can-change-password", async (req, res) => {
   const { roomCode, deviceId } = req.body;
 
-  const data = permanentRooms.get(roomCode);
+  const code = roomCode.toUpperCase();
 
-  if (!data)
-    return res.status(404).json({ allowed: false, error: "Room not found" });
+  const { data: room } = await supabase
+    .from("premium_rooms")
+    .select("*")
+    .eq("code", code)
+    .single();
 
-  const now = Date.now();
-
-  if (data.deviceId !== deviceId)
-    return res.status(403).json({ allowed: false, error: "Not your device" });
-
-  if (now > data.canChangePasswordUntil)
+  if (!room) {
     return res.json({
       allowed: false,
-      message: "48-hour window expired",
+      reason: "room-not-found",
     });
+  }
+
+  if (room.device_id !== deviceId) {
+    return res.json({
+      allowed: false,
+      reason: "not-owner-device",
+    });
+  }
+
+  if (Date.now() > room.can_change_password_until) {
+    return res.json({
+      allowed: false,
+      reason: "password-window-expired",
+    });
+  }
 
   return res.json({ allowed: true });
 });
 
+// -----------------------------
+// ANTI-RANDOM GENERATOR
+// NEVER generate:
+// - purchased rooms
+// - shop genz codes
+// -----------------------------
+router.get("/generate-random-room", async (req, res) => {
+  function randomCode() {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let out = "";
+    for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  }
 
-// ---------------------------
-// GENERATE RANDOM ROOM CODE (NO PREMIUMS)
-// ---------------------------
+  async function isPremium(code: string) {
+    const { data } = await supabase
+      .from("premium_rooms")
+      .select("code")
+      .eq("code", code)
+      .single();
 
-export function generateRandomRoom() {
-  let code = "";
+    return !!data;
+  }
 
+  let code;
   do {
-    code = Math.random().toString(36).substring(2, 8).toUpperCase();
-  } while (permanentRooms.has(code)); // Block premium codes
+    code = randomCode();
+  } while (await isPremium(code) || isBlockedPrefix(code));
 
-  return code;
-}
+  return res.json({ room: code });
+});
 
 export default router;

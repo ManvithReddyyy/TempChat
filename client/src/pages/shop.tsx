@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,13 +6,14 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
+// Gen-Z room suggestions
 const GENZ_WORDS = [
   "SKY", "LIT", "HYPE", "VIBE", "MOON",
-  "NOVA", "ZOOM", "WAVE", "CLOUD", "CYBR",
-  "PINK", "FLY"
+  "NOVA", "ZOOM", "CLOUD", "WAVE",
+  "CYBR", "PINK", "FLY"
 ];
 
-const randomGenZCodes = () =>
+const generateGenZCodes = () =>
   Array.from({ length: 12 }, () => {
     const word = GENZ_WORDS[Math.floor(Math.random() * GENZ_WORDS.length)];
     const num = Math.floor(100 + Math.random() * 900);
@@ -23,7 +24,7 @@ export default function ShopPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  // Device ID system
+  // Generate one-time device ID
   let deviceId = localStorage.getItem("deviceId");
   if (!deviceId) {
     deviceId = crypto.randomUUID();
@@ -34,61 +35,89 @@ export default function ShopPage() {
   const [roomStatus, setRoomStatus] = useState<"available" | "taken" | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
-  const [codes] = useState<string[]>(randomGenZCodes());
+  const [codes] = useState(generateGenZCodes());
 
-  // check room
-  const checkRoom = async () => {
-    if (searchCode.length !== 6) return;
+  // ***************
+  // FIXED CHECK ROOM
+  // ***************
+  const checkRoom = async (code?: string) => {
+    const finalCode = (code || searchCode).toUpperCase();
+
+    if (finalCode.length !== 6) return;
 
     setIsChecking(true);
 
     try {
-      const res = await fetch(`/api/shop/check/${searchCode}`);
+      const res = await fetch(`/api/shop/check/${finalCode}`);
       const data = await res.json();
       setRoomStatus(data.status);
-    } catch {
-      toast({ title: "Error", description: "Checking failed", variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Could not check room.",
+        variant: "destructive",
+      });
     }
 
     setIsChecking(false);
   };
 
-  // buy room
+  // ***************
+  // BUY ROOM
+  // ***************
   const buyRoom = async () => {
     setIsBuying(true);
     try {
       const res = await fetch("/api/shop/buy-room", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode: searchCode, deviceId }),
+        body: JSON.stringify({
+          roomCode: searchCode,
+          deviceId,
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        toast({ title: "Error", description: data.error, variant: "destructive" });
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive",
+        });
         return;
       }
 
-      toast({ title: "Success", description: "Room purchased!" });
+      toast({
+        title: "Success!",
+        description: "Room purchased successfully!",
+      });
+
       setLocation(`/payment?room=${searchCode}`);
 
-    } catch {
-      toast({ title: "Error", description: "Unexpected error", variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Unexpected error.",
+        variant: "destructive",
+      });
     }
+
     setIsBuying(false);
   };
 
   return (
     <div className="min-h-screen p-6 flex flex-col items-center gap-8">
 
-      {/* Main Card */}
+      {/* MAIN CARD */}
       <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle className="text-xl font-bold">Buy a Permanent Room</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-6">
 
+          {/* INPUT */}
           <div className="space-y-2">
             <Label>Search Room Code</Label>
             <Input
@@ -97,17 +126,22 @@ export default function ShopPage() {
               onChange={(e) => {
                 const val = e.target.value.toUpperCase();
                 setSearchCode(val);
-                if (val.length === 6) checkRoom();
+                if (val.length === 6) checkRoom(val);
               }}
               maxLength={6}
               className="text-center font-mono text-lg tracking-wider"
             />
           </div>
 
-          <Button className="w-full" onClick={checkRoom} disabled={isChecking}>
+          <Button
+            className="w-full"
+            onClick={() => checkRoom(searchCode)}
+            disabled={isChecking}
+          >
             {isChecking ? "Checking..." : "Check Availability"}
           </Button>
 
+          {/* STATUS */}
           {roomStatus && (
             <div
               className={`p-3 rounded-lg text-center font-medium ${
@@ -118,16 +152,19 @@ export default function ShopPage() {
             >
               {roomStatus === "available"
                 ? "Room is available!"
-                : "Room is taken"}
+                : "Room is already taken"}
             </div>
           )}
 
           {roomStatus === "available" && (
-            <Button className="w-full" onClick={buyRoom} disabled={isBuying}>
+            <Button
+              className="w-full"
+              onClick={buyRoom}
+              disabled={isBuying}
+            >
               {isBuying ? "Processing..." : "Buy Room"}
             </Button>
           )}
-
         </CardContent>
       </Card>
 
@@ -138,7 +175,7 @@ export default function ShopPage() {
             key={code}
             onClick={() => {
               setSearchCode(code);
-              checkRoom();
+              checkRoom(code); // FIXED: always checks right code
             }}
             className="cursor-pointer p-4 border rounded-xl shadow-sm hover:shadow-md transition bg-white text-center font-mono text-lg tracking-widest"
           >
