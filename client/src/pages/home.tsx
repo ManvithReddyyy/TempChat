@@ -55,23 +55,10 @@ export default function Home() {
       return;
     }
 
-    // Secret room case
+
+    // Secret room case: just navigate, let chat page handle password prompt
     if (SECRET_ROOM && code === SECRET_ROOM) {
-      const pass = prompt("This room is protected. Enter password:");
-
-      if (!pass) {
-        toast({
-          title: "Password required",
-          description: "You must enter a password to join.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Correct param name → password=
-      setLocation(
-        `/chat/${code}?username=${finalName}&password=${encodeURIComponent(pass)}`
-      );
+      setLocation(`/chat/${code}?username=${finalName}`);
       return;
     }
 
