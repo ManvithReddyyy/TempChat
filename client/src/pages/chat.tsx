@@ -21,7 +21,7 @@ export default function Chat() {
   const [isConnecting, setIsConnecting] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  const [passwordRequired, setPasswordRequired] = useState(true);
+  const [passwordRequired, setPasswordRequired] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
