@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { supabase } from "./supabaseClient";
-
+//
 const router = Router();
 
 // LIST OF GEN-Z SHOP CODES THAT SHOULD NOT BE RANDOMLY GENERATED
