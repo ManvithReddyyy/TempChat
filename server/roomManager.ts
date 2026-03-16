@@ -6,7 +6,7 @@ dotenv.config();
 // Hidden secret room values (not visible in GitHub because from .env)
 const hiddenKey = (process.env.SPECIAL_KEY_1 || "").toUpperCase();
 const hiddenPass = process.env.SPECIAL_KEY_2 || "";
-
+//errors
 // Temporary room inactivity timeout (30 minutes)
 const ROOM_INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 
